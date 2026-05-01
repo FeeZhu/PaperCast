@@ -169,7 +169,7 @@ def upsert_paper(paper: Paper) -> bool:
                 citation_count, influential_citation_count, citation_updated_at,
                 ai_analysis, ai_analyzed_at,
                 is_read, is_favorited, notes)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 paper.id,
                 paper.title,

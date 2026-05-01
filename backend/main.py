@@ -87,7 +87,7 @@ async def api_topics():
 async def api_papers(
     topic: Optional[str] = Query(None),
     date: Optional[str] = Query(None),
-    sort: str = Query("date", regex="^(date|popular)$"),
+    sort: str = Query("date", pattern="^(date|popular)$"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     favorited: bool = Query(False),

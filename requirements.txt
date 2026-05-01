@@ -1,0 +1,7 @@
+fastapi>=0.104.0
+uvicorn>=0.24.0
+arxiv>=2.1.0
+edge-tts>=6.1.0
+apscheduler>=3.10.4
+aiofiles>=23.2.1
+aiohttp>=3.9.0

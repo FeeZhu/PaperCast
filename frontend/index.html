@@ -1,0 +1,2357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#f5f5f0">
+<title>PaperCast - Listen to arXiv Papers</title>
+<link rel="manifest" href="/assets/manifest.json">
+<link rel="apple-touch-icon" href="/assets/icon-192.png">
+<style>
+/* ─── CSS Variables (Light Theme — easy on the eyes) ─── */
+:root {
+  --bg-primary: #f5f5f0;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-player: #fafafa;
+  --text-primary: #1a1a1a;
+  --text-secondary: #444444;
+  --text-muted: #777777;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-dim: rgba(37, 99, 235, 0.08);
+  --border: #d4d4d4;
+  --shadow: rgba(0, 0, 0, 0.08);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { font-size: 17px; }
+html, body {
+  font-family: var(--font);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  height: 100%;
+  overflow: hidden;
+}
+body { display: flex; flex-direction: column; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; color: var(--accent-hover); }
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ─── Header ─── */
+.header {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  z-index: 10;
+}
+.header-logo {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.header-logo svg { width: 24px; height: 24px; }
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  justify-content: flex-end;
+}
+.header-controls select,
+.header-controls input {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 14px;
+  font-family: var(--font);
+  outline: none;
+}
+.header-controls select { min-width: 120px; }
+.header-controls input[type="date"] { min-width: 130px; }
+.header-controls select:focus,
+.header-controls input:focus {
+  border-color: var(--accent);
+}
+.btn-icon {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  width: 34px; height: 34px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: all 0.2s;
+}
+.btn-icon:hover {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.btn-icon:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.btn-icon.spinning svg { animation: spin 1s linear infinite; }
+.btn-icon.voice-active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── Voice Status Indicator ──────────── */
+.voice-indicator {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+  transition: background 0.3s, transform 0.3s, box-shadow 0.3s;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+.voice-indicator.idle {
+  background: #4caf50;
+  animation: voiceIdle 2s ease-in-out infinite;
+}
+.voice-indicator.hot {
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+  animation: voiceHot 0.6s ease-in-out infinite;
+}
+@keyframes voiceIdle {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.9; }
+}
+@keyframes voiceHot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.6); opacity: 0.6; }
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+
+/* ─── Search Bar ─── */
+.search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  max-width: 280px;
+}
+.search-wrap input {
+  flex: 1;
+  min-width: 80px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 14px;
+  font-family: var(--font);
+  outline: none;
+  transition: border-color 0.2s;
+}
+.search-wrap input:focus { border-color: var(--accent); }
+.search-wrap input::placeholder { color: var(--text-muted); }
+.search-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.search-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+.search-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.search-clear {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 2px;
+  line-height: 1;
+}
+.search-clear.show { display: inline; }
+.search-clear:hover { color: var(--text-primary); }
+
+/* ─── Sort Toggle ─── */
+.sort-toggle {
+  display: flex;
+  background: var(--bg-card);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.sort-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  padding: 5px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: var(--font);
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.sort-btn:hover { color: var(--text-primary); }
+.sort-btn.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ─── Paper List ─── */
+.paper-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+  padding-bottom: 90px; /* space for player bar */
+}
+.paper-list-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 40px;
+  gap: 12px;
+}
+.paper-list-empty svg { width: 48px; height: 48px; opacity: 0.4; }
+.paper-list-empty p { font-size: 17px; }
+.paper-list-empty .sub { font-size: 14px; }
+
+.paper-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+  cursor: pointer;
+  box-shadow: 0 1px 3px var(--shadow);
+}
+.paper-item:hover {
+  border-color: var(--accent);
+  box-shadow: 0 3px 12px var(--shadow);
+  transform: translateY(-1px);
+}
+.paper-item:active {
+  transform: translateY(0);
+}
+.paper-item.playing {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+.paper-item-header {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.paper-item-info {
+  flex: 1;
+  min-width: 0;
+}
+.paper-item-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1.4;
+  margin-bottom: 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.paper-item-authors {
+  font-size: 14px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 6px;
+}
+.paper-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.paper-item-cat {
+  background: #e8e8e3;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.paper-item-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.play-btn {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent);
+  color: #000;
+  font-size: 17px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.play-btn:hover { background: var(--accent-hover); transform: scale(1.05); }
+.play-btn.playing { background: var(--accent); }
+.play-btn.generating {
+  opacity: 0.8;
+  pointer-events: none;
+  animation: pulse 1s ease-in-out infinite;
+}
+.play-btn.loading { opacity: 0.6; pointer-events: none; }
+.duration-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ─── Favorite Star Button ─── */
+.fav-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 2px;
+  transition: all 0.2s;
+  line-height: 1;
+}
+.fav-btn:hover {
+  color: #eab308;
+  transform: scale(1.15);
+}
+.fav-btn.favorited {
+  color: #eab308;
+}
+.fav-btn.favorited:hover {
+  color: #ca8a04;
+}
+
+/* ─── Notes Section ─── */
+.notes-section {
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.notes-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.notes-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.notes-indicator {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.notes-textarea {
+  width: 100%;
+  min-height: 56px;
+  max-height: 140px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: var(--font);
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.notes-textarea:focus {
+  border-color: var(--accent);
+}
+.notes-textarea::placeholder {
+  color: var(--text-muted);
+}
+
+/* ─── Favorited paper card indicator ─── */
+.paper-item.favorited {
+  border-color: #eab308;
+  background: rgba(234, 179, 8, 0.04);
+}
+
+/* ─── Text Annotations / Highlights ─── */
+.annotation-highlight {
+  cursor: pointer;
+  border-radius: 2px;
+  padding: 0 1px;
+  transition: background 0.2s;
+}
+.annotation-highlight:hover {
+  filter: brightness(0.8);
+}
+.annotation-underline {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-thickness: 2.5px;
+  text-underline-offset: 2px;
+  padding: 0 1px;
+  transition: opacity 0.2s;
+}
+.annotation-underline:hover {
+  opacity: 0.7;
+}
+
+/* Color picker popup */
+.annotation-picker {
+  position: fixed;
+  z-index: 300;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  box-shadow: 0 4px 16px var(--shadow);
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+}
+.annotation-picker.show { display: flex; }
+.annotation-picker-colors {
+  display: flex;
+  gap: 5px;
+}
+.annotation-picker-color {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.annotation-picker-color:hover { transform: scale(1.2); }
+.annotation-picker-color.selected { border-color: var(--text-primary); }
+.annotation-picker-input {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 13px;
+  font-family: var(--font);
+  outline: none;
+  width: 200px;
+}
+.annotation-picker-input:focus { border-color: var(--accent); }
+.annotation-picker-types {
+  display: flex;
+  gap: 4px;
+}
+.annotation-picker-type {
+  flex: 1;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: var(--font);
+  transition: all 0.15s;
+  text-align: center;
+  color: var(--text-secondary);
+}
+.annotation-picker-type.selected {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.annotation-picker-type:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.annotation-picker-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.annotation-picker-btn {
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: var(--font);
+}
+.annotation-picker-btn:hover { background: var(--accent-hover); }
+.annotation-picker-btn.cancel {
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+.annotation-picker-btn.cancel:hover { background: var(--border); }
+
+/* Annotation tooltip */
+.annotation-tooltip {
+  position: fixed;
+  z-index: 300;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  box-shadow: 0 4px 16px var(--shadow);
+  display: none;
+  max-width: 320px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+.annotation-tooltip.show { display: block; }
+.annotation-tooltip-note {
+  margin-bottom: 8px;
+  word-wrap: break-word;
+}
+.annotation-tooltip-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.annotation-tooltip-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: var(--font);
+  padding: 3px 8px;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+.annotation-tooltip-btn:hover { background: var(--accent-dim); color: var(--accent); }
+.annotation-tooltip-btn.danger:hover { color: #ef4444; background: rgba(239,68,68,0.1); }
+
+/* ─── Paper Detail ─── */
+.paper-detail {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  animation: fadeIn 0.2s ease;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.paper-detail-abstract {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+  max-height: 200px;
+  overflow-y: auto;
+  user-select: text;
+  cursor: text;
+}
+.paper-detail-link {
+  display: inline-block;
+  font-size: 14px;
+  padding: 6px 14px;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  text-decoration: none;
+  transition: all 0.2s;
+}
+.paper-detail-link:hover {
+  background: var(--accent);
+  color: #000;
+  text-decoration: none;
+}
+
+/* ─── AI Analysis (Per-Paper Q1-Q5) ─── */
+.ai-summarize-btn {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 7px 16px;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  font-size: 14px;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.ai-summarize-btn:hover {
+  background: var(--accent);
+  color: #000;
+}
+.ai-summarize-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.ai-analysis-result {
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--accent-dim);
+  border: 1px solid rgba(37, 99, 235, 0.15);
+  border-radius: var(--radius-sm);
+}
+.ai-qa {
+  margin-bottom: 10px;
+}
+.ai-qa:last-child { margin-bottom: 0; }
+.ai-qq {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 3px;
+}
+.ai-aa {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* ─── Player Bar (Fixed Bottom) ─── */
+.player-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-player);
+  border-top: 1px solid var(--border);
+  padding: 10px 16px 14px;
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 100;
+}
+.player-bar.active { display: flex; }
+.player-track-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.player-track-title {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+.player-track-open {
+  font-size: 12px;
+  color: var(--accent);
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.player-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.player-btn {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+.player-btn:hover { color: var(--accent); }
+.player-btn-small { width: 28px; height: 28px; font-size: 18px; }
+.player-btn-medium { width: 36px; height: 36px; font-size: 22px; }
+.player-btn-play {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #000;
+  font-size: 18px;
+}
+.player-btn-play:hover {
+  background: var(--accent-hover);
+  color: #000;
+}
+.player-progress-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.player-time {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  min-width: 35px;
+  text-align: center;
+}
+.progress-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  cursor: pointer;
+  position: relative;
+  min-width: 40px;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  width: 0%;
+  transition: width 0.1s linear;
+}
+.progress-bar-thumb {
+  display: none;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 12px; height: 12px;
+  background: var(--accent);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.progress-bar:hover .progress-bar-thumb { display: block; }
+.player-speed {
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  white-space: nowrap;
+  transition: all 0.2s;
+  font-family: var(--font);
+  background: var(--bg-card);
+}
+.player-speed:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ─── Caption Sentence Highlight (in abstract) ─── */
+.caption-sentence {
+  border-radius: 2px;
+  transition: background 0.25s ease, color 0.25s ease;
+}
+.caption-sentence.active {
+  background: rgba(37, 99, 235, 0.18);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.player-btn-caption {
+  font-family: serif;
+  font-weight: 700;
+  font-size: 15px;
+}
+.player-btn-caption.active { color: var(--accent); }
+
+/* ─── Status Toast ─── */
+.toast {
+  position: fixed;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  z-index: 200;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+.toast.show { opacity: 1; }
+
+/* ─── Responsive ─── */
+@media (max-width: 600px) {
+  .header { padding: 10px 12px; flex-wrap: wrap; }
+  .header-logo { font-size: 17px; }
+  .header-controls { flex-wrap: wrap; gap: 6px; }
+  .search-wrap { max-width: 100%; order: 10; flex-basis: 100%; }
+  .header-controls select { min-width: 90px; font-size: 13px; }
+  .header-controls input[type="date"] { min-width: 110px; font-size: 13px; }
+  .sort-toggle { order: 8; }
+  .sort-btn { font-size: 12px; padding: 4px 8px; }
+  .paper-list { padding: 10px 12px; padding-bottom: 100px; }
+  .paper-item { padding: 12px; }
+  .paper-item-title { font-size: 15px; }
+  .play-btn { width: 36px; height: 36px; font-size: 15px; }
+  .player-bar { padding: 8px 12px 12px; }
+  .player-track-title { font-size: 13px; }
+  .player-btn-play { width: 36px; height: 36px; font-size: 17px; }
+  .paper-item-meta { flex-wrap: wrap; }
+  .player-btn-caption { font-size: 14px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ─── Header ─── -->
+<header class="header">
+  <div class="header-logo" onclick="location.reload()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M9 18V5l12-2v13"/>
+      <circle cx="6" cy="18" r="3"/>
+      <circle cx="18" cy="16" r="3"/>
+    </svg>
+    PaperCast
+    <span class="voice-indicator" id="voiceIndicator" title="Say &quot;小p&quot; to control by voice"></span>
+  </div>
+  <div class="header-controls">
+    <div class="search-wrap">
+      <input type="text" id="searchInput" placeholder="Search papers..." onkeydown="if(event.key==='Enter')onSearch()">
+      <button class="search-btn" id="searchBtn" onclick="onSearch()">🔍</button>
+      <button class="search-clear" id="searchClear" onclick="clearSearch()">✕</button>
+    </div>
+    <div class="sort-toggle">
+      <button class="sort-btn active" data-sort="date" onclick="onSortChange('date')">Latest</button>
+      <button class="sort-btn" data-sort="popular" onclick="onSortChange('popular')">Hot</button>
+      <button class="sort-btn" data-sort="fav" onclick="onSortChange('fav')">★ Fav</button>
+    </div>
+    <select id="topicSelect" onchange="onTopicChange()"></select>
+    <input type="date" id="datePicker" onchange="onDateChange()">
+    <button class="btn-icon" id="voiceToggleBtn" onclick="toggleVoiceControl()" title="Toggle voice control">
+      🎤
+    </button>
+    <button class="btn-icon" id="refreshBtn" onclick="onRefresh()" title="Refresh papers">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M1 4v6h6M23 20v-6h-6"/>
+        <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<!-- ─── Paper List ─── -->
+<main class="paper-list" id="paperList">
+  <div class="paper-list-empty">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M9 18V5l12-2v13"/>
+      <circle cx="6" cy="18" r="3"/>
+      <circle cx="18" cy="16" r="3"/>
+    </svg>
+    <p>Loading papers...</p>
+    <div class="sub">Fetching the latest arXiv papers</div>
+  </div>
+</main>
+
+<!-- ─── Player Bar ─── -->
+<div class="player-bar" id="playerBar">
+  <div class="player-track-info">
+    <span class="player-track-title" id="playerTrackTitle">No track selected</span>
+    <span class="player-track-open" id="playerTrackOpen" onclick="openCurrentPaper()">View paper →</span>
+  </div>
+  <div class="player-controls">
+    <button class="player-btn player-btn-small" onclick="prevTrack()" title="Previous">⏮</button>
+    <button class="player-btn player-btn-medium player-btn-play" id="playBtn" onclick="togglePlay()">
+      ▶
+    </button>
+    <button class="player-btn player-btn-small" onclick="nextTrack()" title="Next">⏭</button>
+    <div class="player-progress-wrap">
+      <span class="player-time" id="currentTime">0:00</span>
+      <div class="progress-bar" id="progressBar" onclick="seekAudio(event)">
+        <div class="progress-bar-fill" id="progressFill"></div>
+        <div class="progress-bar-thumb" id="progressThumb"></div>
+      </div>
+      <span class="player-time" id="totalTime">0:00</span>
+    </div>
+    <select class="player-speed" id="speedSelect" onchange="changeSpeed()">
+      <option value="0.75">0.75×</option>
+      <option value="1" selected>1×</option>
+      <option value="1.25">1.25×</option>
+      <option value="1.5">1.5×</option>
+      <option value="2">2×</option>
+    </select>
+    <button class="player-btn player-btn-small player-btn-caption" id="captionToggle" onclick="toggleCaptions()" title="Toggle real-time captions">Aa</button>
+  </div>
+</div>
+
+<!-- ─── Toast ─── -->
+<div class="toast" id="toast"></div>
+
+<!-- ─── Annotation Picker ─── -->
+<div class="annotation-picker" id="annotationPicker">
+  <div class="annotation-picker-colors">
+    <div class="annotation-picker-color selected" data-color="yellow" style="background:rgba(234,179,8,0.4)" onclick="pickAnnotationColor('yellow')"></div>
+    <div class="annotation-picker-color" data-color="green" style="background:rgba(34,197,94,0.4)" onclick="pickAnnotationColor('green')"></div>
+    <div class="annotation-picker-color" data-color="blue" style="background:rgba(59,130,246,0.4)" onclick="pickAnnotationColor('blue')"></div>
+    <div class="annotation-picker-color" data-color="pink" style="background:rgba(236,72,153,0.4)" onclick="pickAnnotationColor('pink')"></div>
+    <div class="annotation-picker-color" data-color="orange" style="background:rgba(249,115,22,0.4)" onclick="pickAnnotationColor('orange')"></div>
+  </div>
+  <div class="annotation-picker-types">
+    <button class="annotation-picker-type selected" data-type="highlight" onclick="pickAnnotationType('highlight')">▨ Highlight</button>
+    <button class="annotation-picker-type" data-type="underline" onclick="pickAnnotationType('underline')">═ Underline</button>
+  </div>
+  <input class="annotation-picker-input" id="annotationPickerInput" placeholder="Write a note..." maxlength="200">
+  <div class="annotation-picker-actions">
+    <button class="annotation-picker-btn cancel" onclick="hideAnnotationPicker()">Cancel</button>
+    <button class="annotation-picker-btn" onclick="saveAnnotation()">Save</button>
+  </div>
+</div>
+
+<!-- ─── Annotation Tooltip ─── -->
+<div class="annotation-tooltip" id="annotationTooltip">
+  <div class="annotation-tooltip-note" id="annotationTooltipNote"></div>
+  <div class="annotation-tooltip-actions">
+    <button class="annotation-tooltip-btn danger" onclick="deleteAnnotation()">Delete</button>
+    <button class="annotation-tooltip-btn" onclick="hideAnnotationTooltip()">Close</button>
+  </div>
+</div>
+
+<!-- ─── Audio Element ─── -->
+<audio id="audioPlayer" preload="none"></audio>
+
+<script>
+// ─── State ──────────────────────────────────────────────
+const state = {
+  papers: [],
+  currentIndex: -1,
+  isPlaying: false,
+  isLoading: false,
+  currentTopic: '',
+  currentDate: '',
+  searchQuery: '',
+  isSearchMode: false,
+  generatingSet: new Set(),  // paper IDs currently generating audio
+  page: 1,
+  totalPages: 1,
+  loadingMore: false,
+  showCaptions: false,
+  captionSentences: [],  // [{text, startTime, endTime}]
+  currentSort: 'date',
+  showFavorites: false,
+  voiceEnabled: false,
+};
+
+// ─── DOM refs ───────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+const paperList = $('paperList');
+const audio = $('audioPlayer');
+const playerBar = $('playerBar');
+const playBtn = $('playBtn');
+const progressFill = $('progressFill');
+const progressThumb = $('progressThumb');
+const progressBar = $('progressBar');
+const currentTime = $('currentTime');
+const totalTime = $('totalTime');
+const playerTrackTitle = $('playerTrackTitle');
+const playerTrackOpen = $('playerTrackOpen');
+const topicSelect = $('topicSelect');
+const datePicker = $('datePicker');
+const refreshBtn = $('refreshBtn');
+const searchInput = $('searchInput');
+const searchBtn = $('searchBtn');
+const searchClear = $('searchClear');
+const captionToggle = $('captionToggle');
+const toast = $('toast');
+
+// ─── Init ───────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  // Set default date to today
+  const today = new Date().toISOString().split('T')[0];
+  datePicker.value = today;
+  state.currentDate = today;
+
+  await loadTopics();
+  await loadPapers();
+
+  // Infinite scroll
+  paperList.addEventListener('scroll', onScroll);
+
+  // Audio events
+  audio.addEventListener('timeupdate', onTimeUpdate);
+  audio.addEventListener('ended', onTrackEnded);
+  audio.addEventListener('loadedmetadata', onLoadedMetadata);
+  audio.addEventListener('error', onAudioError);
+});
+
+// ─── API ────────────────────────────────────────────────
+const API = {
+  async get(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+  async post(url) {
+    const res = await fetch(url, { method: 'POST' });
+    return res.json();
+  },
+  async put(url, body) {
+    const res = await fetch(url, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    return res.json();
+  },
+  topics: () => API.get('/api/topics'),
+  papers: (topic, date, sort, page = 1, favorited = false) =>
+    API.get(`/api/papers?topic=${encodeURIComponent(topic || '')}&date=${date}&sort=${sort}&page=${page}&limit=30${favorited ? '&favorited=true' : ''}`),
+  search: (q, topic, page = 1) =>
+    API.get(`/api/search?q=${encodeURIComponent(q)}&topic=${encodeURIComponent(topic || '')}&page=${page}&limit=30`),
+  paperDetail: (id) => API.get(`/api/papers/${encodeURIComponent(id)}`),
+  refresh: () => API.post('/api/refresh'),
+  markRead: (id) => API.post(`/api/papers/${encodeURIComponent(id)}/read`),
+  favorite: (id) => API.post(`/api/papers/${encodeURIComponent(id)}/favorite`),
+  saveNotes: (id, notes) => API.put(`/api/papers/${encodeURIComponent(id)}/notes`, { notes }),
+  status: () => API.get('/api/status'),
+};
+
+// ─── Topic Loading ──────────────────────────────────────
+async function loadTopics() {
+  try {
+    const topics = await API.topics();
+    topicSelect.innerHTML = '<option value="">All Topics</option>';
+    topics.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.code;
+      opt.textContent = t.name;
+      topicSelect.appendChild(opt);
+    });
+  } catch (e) {
+    console.error('Failed to load topics:', e);
+  }
+}
+
+// ─── Paper Loading & Search ─────────────────────────────
+async function loadPapers(append = false) {
+  if (!append) {
+    state.page = 1;
+    paperList.innerHTML = `
+      <div class="paper-list-empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="10" stroke-dasharray="30 10"><animate attributeName="stroke-dashoffset" values="0;40" dur="1s" repeatCount="indefinite"/></circle>
+        </svg>
+        <p>Loading papers...</p>
+      </div>`;
+  }
+
+  try {
+    const prevCount = state.papers.length;
+    let data;
+
+    if (state.isSearchMode && state.searchQuery) {
+      data = await API.search(state.searchQuery, state.currentTopic, state.page);
+    } else {
+      data = await API.papers(
+        state.currentTopic,
+        state.currentDate,
+        state.currentSort === 'fav' ? 'date' : state.currentSort,
+        state.page,
+        state.currentSort === 'fav',
+      );
+    }
+
+    state.totalPages = data.pages;
+
+    if (append) {
+      state.papers.push(...data.papers);
+      renderPapers(true, prevCount);
+    } else {
+      state.papers = data.papers;
+      renderPapers(false, 0);
+    }
+  } catch (e) {
+    console.error('Failed to load papers:', e);
+    if (!append) {
+      paperList.innerHTML = `
+        <div class="paper-list-empty">
+          <p>Failed to load papers</p>
+          <div class="sub">${e.message}</div>
+          <button onclick="loadPapers()" style="margin-top:12px;padding:8px 20px;background:var(--accent);border:none;border-radius:8px;color:#000;cursor:pointer;font-size:14px;">Retry</button>
+        </div>`;
+    }
+  }
+}
+
+function renderPapers(append, prevCount) {
+  if (!append) {
+    paperList.innerHTML = '';
+  } else {
+    const loader = paperList.querySelector('.load-more');
+    if (loader) loader.remove();
+  }
+
+  if (state.papers.length === 0) {
+    const msg = state.isSearchMode
+      ? `<p>No results for "${escapeHtml(state.searchQuery)}"</p><div class="sub">Try different keywords or topic</div>`
+      : `<p>No papers found</p><div class="sub">Try a different topic or date</div>`;
+    paperList.innerHTML = `
+      <div class="paper-list-empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+        </svg>
+        ${msg}
+      </div>`;
+    return;
+  }
+
+  const startIdx = append ? prevCount : 0;
+
+  for (let idx = startIdx; idx < state.papers.length; idx++) {
+    const paper = state.papers[idx];
+    const isCurrentlyPlaying = state.currentIndex === idx;
+    const isGenerating = state.generatingSet.has(paper.id);
+
+    const div = document.createElement('div');
+    div.className = 'paper-item' + (paper.is_favorited ? ' favorited' : '');
+    div.dataset.index = idx;
+
+    let playBtnClass = 'play-btn';
+    let playBtnIcon = '▶';
+    if (isCurrentlyPlaying && state.isPlaying) {
+      playBtnClass += ' playing';
+      playBtnIcon = '⏸';
+    }
+    if (isGenerating) {
+      playBtnClass += ' generating';
+      playBtnIcon = '⏳';
+    }
+
+    const favStar = paper.is_favorited ? '★' : '☆';
+    const annotations = getAnnotations(paper);
+    const hasAnnotations = annotations.length > 0;
+
+    div.innerHTML = `
+      <div class="paper-item-header">
+        <div class="paper-item-info">
+          <div class="paper-item-title">${escapeHtml(paper.title)}</div>
+          <div class="paper-item-authors">${escapeHtml(paper.authors || 'Unknown authors')}</div>
+          <div class="paper-item-meta">
+            <span>${paper.published}</span>
+            ${paper.categories ? `<span class="paper-item-cat">${escapeHtml(paper.categories.split(',')[0].trim())}</span>` : ''}
+            ${paper.audio_duration ? `<span>${formatDuration(paper.audio_duration)}</span>` : '<span style="color:var(--accent);font-size:11px">on-demand</span>'}
+            ${paper.citation_count > 0 ? `<span style="color:var(--accent);font-size:11px" title="${paper.citation_count} citations, ${paper.influential_citation_count} influential">🔥 ${paper.citation_count}</span>` : ''}
+            ${hasAnnotations ? `<span style="font-size:11px" title="${annotations.length} annotation(s)">📝 ${annotations.length}</span>` : ''}
+          </div>
+        </div>
+        <div class="paper-item-actions">
+          <button class="fav-btn${paper.is_favorited ? ' favorited' : ''}"
+                  onclick="event.stopPropagation(); toggleFavorite(${idx})"
+                  data-idx="${idx}"
+                  title="${paper.is_favorited ? 'Remove from favorites' : 'Add to favorites'}">
+            ${favStar}
+          </button>
+          <button class="${playBtnClass}"
+                  onclick="event.stopPropagation(); playPaper(${idx})"
+                  data-index="${idx}">
+            ${playBtnIcon}
+          </button>
+        </div>
+      </div>
+      <div class="paper-detail">
+        <div class="paper-detail-abstract">${renderAbstractHtml(paper)}</div>
+        ${renderAiDetail(paper, idx)}
+        <a class="paper-detail-link" href="${paper.link}" target="_blank" rel="noopener">View on arXiv →</a>
+      </div>
+    `;
+
+    paperList.appendChild(div);
+
+    // Attach abstract mouseup handler for text annotation
+    const absEl = div.querySelector('.paper-detail-abstract');
+    if (absEl) {
+      absEl.addEventListener('mouseup', (event) => onAbstractMouseUp(event, idx));
+    }
+  }
+}
+
+// ─── AI Display & Analyze (Per-Paper) ───────────────────
+function renderAiDetail(paper, idx) {
+  // Show analysis result if available
+  if (paper.ai_analysis) {
+    try {
+      const analysis = JSON.parse(paper.ai_analysis);
+      let html = '<div class="ai-analysis-result">';
+      if (analysis.q1) html += `<div class="ai-qa"><div class="ai-qq">Q1: 这篇论文试图解决什么问题？</div><div class="ai-aa">${escapeHtml(analysis.q1)}</div></div>`;
+      if (analysis.q2) html += `<div class="ai-qa"><div class="ai-qq">Q2: 有哪些相关研究？</div><div class="ai-aa">${escapeHtml(analysis.q2)}</div></div>`;
+      if (analysis.q3) html += `<div class="ai-qa"><div class="ai-qq">Q3: 论文如何解决这个问题？</div><div class="ai-aa">${escapeHtml(analysis.q3)}</div></div>`;
+      if (analysis.q5) html += `<div class="ai-qa"><div class="ai-qq">Q5: 有什么可以进一步探索的点？</div><div class="ai-aa">${escapeHtml(analysis.q5)}</div></div>`;
+      html += '</div>';
+      return html;
+    } catch (e) {
+      return '';
+    }
+  }
+  // Show summarize button if paper hasn't been analyzed
+  return `<button class="ai-summarize-btn" onclick="event.stopPropagation(); onAnalyzePaper(${idx})" data-idx="${idx}">🤖 AI 总结</button>`;
+}
+
+async function onAnalyzePaper(idx) {
+  const paper = state.papers[idx];
+  if (!paper) return;
+
+  const btn = document.querySelector(`.ai-summarize-btn[data-idx="${idx}"]`);
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '分析中...';
+  }
+
+  try {
+    const res = await fetch(`/api/papers/${encodeURIComponent(paper.id)}/analyze`, { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(err || `HTTP ${res.status}`);
+    }
+    const result = await res.json();
+    paper.ai_analysis = JSON.stringify(result);
+
+    // Re-render the AI section in the detail panel
+    const paperItem = document.querySelector(`.paper-item[data-index="${idx}"]`);
+    if (paperItem) {
+      const detailEl = paperItem.querySelector('.paper-detail');
+      if (detailEl) {
+        const oldSection = detailEl.querySelector('.ai-analysis-result, .ai-summarize-btn');
+        if (oldSection) oldSection.remove();
+        const link = detailEl.querySelector('.paper-detail-link');
+        if (link) {
+          link.insertAdjacentHTML('beforebegin', renderAiDetail(paper, idx));
+        }
+      }
+    }
+
+    showToast('AI 总结完成');
+  } catch (e) {
+    showToast('AI 总结失败: ' + e.message);
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '🤖 AI 总结';
+    }
+  }
+}
+
+// ─── Search ─────────────────────────────────────────────
+async function onSearch() {
+  const q = searchInput.value.trim();
+  if (!q) {
+    clearSearch();
+    return;
+  }
+  resetPlayer();
+  state.searchQuery = q;
+  state.isSearchMode = true;
+  searchBtn.classList.add('active');
+  searchClear.classList.add('show');
+  datePicker.disabled = true;
+  await loadPapers(false);
+}
+
+function clearSearch() {
+  resetPlayer();
+  state.searchQuery = '';
+  state.isSearchMode = false;
+  searchInput.value = '';
+  searchBtn.classList.remove('active');
+  searchClear.classList.remove('show');
+  datePicker.disabled = false;
+  loadPapers(false);
+}
+
+// ─── Playback (On-Demand) ───────────────────────────────
+async function playPaper(idx) {
+  const paper = state.papers[idx];
+  if (!paper) return;
+
+  // Toggle play if already selected
+  if (state.currentIndex === idx && state.isPlaying) {
+    togglePlay();
+    return;
+  }
+
+  // If clicking same item but paused, just play
+  if (state.currentIndex === idx && !state.isPlaying) {
+    togglePlay();
+    return;
+  }
+
+  // Mark as generating
+  state.generatingSet.add(paper.id);
+
+  // If captions are on, restore the previous paper's abstract first
+  if (state.showCaptions && state.currentIndex >= 0) {
+    disableSentenceHighlight();
+  }
+
+  state.currentIndex = idx;
+  state.isLoading = true;
+  updatePlayButtons();
+
+  try {
+    // The backend generates audio on-demand when this endpoint is called
+    const audioUrl = `/api/audio/${paper.id}`;
+    audio.src = audioUrl;
+    audio.load();
+
+    await audio.play();
+    state.isPlaying = true;
+    state.isLoading = false;
+    state.generatingSet.delete(paper.id);
+    playerBar.classList.add('active');
+    playerTrackTitle.textContent = paper.title;
+    playerTrackOpen.dataset.paperId = paper.id;
+    updatePlayButtons();
+    updatePlayerInfo();
+    API.markRead(paper.id).catch(() => {});
+
+    // Update paper's audio_generated status in local state
+    paper.audio_generated = true;
+
+    // Load captions for real-time text display
+    if (state.showCaptions) {
+      state.captionSentences = [];
+      await loadCaptions();
+    }
+
+  } catch (e) {
+    console.error('Play failed:', e);
+    state.isPlaying = false;
+    state.isLoading = false;
+    state.generatingSet.delete(paper.id);
+    updatePlayButtons();
+    showToast('Audio generation failed. Please try again.');
+  }
+}
+
+function togglePlay() {
+  if (state.currentIndex < 0) return;
+
+  if (audio.paused) {
+    audio.play().then(() => {
+      state.isPlaying = true;
+      updatePlayButtons();
+    }).catch(console.error);
+  } else {
+    audio.pause();
+    state.isPlaying = false;
+    updatePlayButtons();
+  }
+}
+
+function prevTrack() {
+  if (state.currentIndex > 0) {
+    playPaper(state.currentIndex - 1);
+  }
+}
+
+function nextTrack() {
+  if (state.currentIndex < state.papers.length - 1) {
+    playPaper(state.currentIndex + 1);
+  }
+}
+
+function openCurrentPaper() {
+  const paper = state.papers[state.currentIndex];
+  if (paper && paper.link) {
+    window.open(paper.link, '_blank');
+  }
+}
+
+function changeSpeed() {
+  audio.playbackRate = parseFloat($('speedSelect').value);
+}
+
+// ─── Captions / Sentence Highlighting in Abstract ─────
+function toggleCaptions() {
+  state.showCaptions = !state.showCaptions;
+  captionToggle.classList.toggle('active', state.showCaptions);
+
+  if (state.showCaptions) {
+    if (state.currentIndex >= 0) {
+      if (state.captionSentences.length === 0) {
+        loadCaptions();
+      } else {
+        wrapAbstractWithSentences();
+      }
+    }
+  } else if (state.currentIndex >= 0) {
+    disableSentenceHighlight();
+  }
+}
+
+async function loadCaptions() {
+  const paper = state.papers[state.currentIndex];
+  if (!paper) return;
+
+  // Fetch full abstract if truncated
+  let abstract = paper.abstract;
+  if (abstract.length > 200 || abstract.endsWith('...')) {
+    try {
+      const detail = await API.paperDetail(paper.id);
+      abstract = detail.abstract;
+    } catch (e) {
+      // Use what we have
+    }
+  }
+
+  buildSentences(paper.title + '. ' + abstract);
+  wrapAbstractWithSentences();
+}
+
+function buildSentences(text) {
+  // Split text into sentences
+  const rawSentences = text.match(/[^.!?]+[.!?]*\s*/g) || [text];
+  const sentences = [];
+
+  for (const raw of rawSentences) {
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    sentences.push({ text: trimmed });
+  }
+
+  // If too few sentences, split by clause boundaries
+  if (sentences.length < 3 && text.length > 100) {
+    const clauseSentences = [];
+    const clauses = text.split(/[,;:]+\s*/g);
+    for (const clause of clauses) {
+      const trimmed = clause.trim();
+      if (!trimmed) continue;
+      clauseSentences.push({ text: trimmed });
+    }
+    if (clauseSentences.length > sentences.length) {
+      state.captionSentences = clauseSentences;
+      calculateTimings();
+      return;
+    }
+  }
+
+  state.captionSentences = sentences;
+  calculateTimings();
+}
+
+function calculateTimings() {
+  const sentences = state.captionSentences;
+  if (sentences.length === 0) return;
+
+  const duration = audio.duration || 0;
+  if (duration <= 0) return;
+
+  // Calculate total characters
+  let totalChars = 0;
+  for (const s of sentences) {
+    s.startTime = totalChars;
+    totalChars += s.text.length;
+    s.endTime = totalChars;
+  }
+
+  // Add a delay offset to account for TTS startup delay and natural pauses.
+  // Character-based timing races ahead of speech because TTS takes time
+  // to initialize, pauses at sentence boundaries, and speaks unevenly.
+  // The offset is applied with a decay so the last sentence still ends at duration.
+  const delay = 0.8; // seconds of initial offset
+  const usableDuration = duration - delay;
+
+  for (const s of sentences) {
+    const startRatio = s.startTime / totalChars;
+    const endRatio = s.endTime / totalChars;
+    // First sentence starts at delay seconds, last sentence ends at duration
+    s.startTime = delay + (startRatio * usableDuration);
+    s.endTime = delay + (endRatio * usableDuration);
+  }
+}
+
+function disableSentenceHighlight() {
+  if (state.currentIndex < 0) return;
+  const paperItem = document.querySelector(`.paper-item[data-index="${state.currentIndex}"]`);
+  if (!paperItem) return;
+  const abstractEl = paperItem.querySelector('.paper-detail-abstract');
+  if (!abstractEl) return;
+
+  if (abstractEl.dataset.originalHtml) {
+    abstractEl.innerHTML = abstractEl.dataset.originalHtml;
+    delete abstractEl.dataset.originalHtml;
+  }
+  delete abstractEl.dataset.captionsEnabled;
+}
+
+function wrapAbstractWithSentences() {
+  if (state.currentIndex < 0) return;
+  const paperItem = document.querySelector(`.paper-item[data-index="${state.currentIndex}"]`);
+  if (!paperItem) return;
+  const abstractEl = paperItem.querySelector('.paper-detail-abstract');
+  if (!abstractEl) return;
+
+  // Save original HTML for later restoration
+  abstractEl.dataset.originalHtml = abstractEl.innerHTML;
+
+  const sentences = state.captionSentences;
+  if (sentences.length === 0) return;
+
+  // Get just the abstract text content (ignoring annotation spans etc.)
+  const textContent = abstractEl.textContent;
+
+  let html = '';
+  let lastEnd = 0;
+  for (let i = 0; i < sentences.length; i++) {
+    const s = sentences[i];
+    // Find sentence position in the abstract's text content
+    const startIdx = textContent.indexOf(s.text, lastEnd);
+    if (startIdx === -1) {
+      // If exact match fails, try case-insensitive
+      const lowerText = textContent.toLowerCase();
+      const lowerSentence = s.text.toLowerCase();
+      const ciIdx = lowerText.indexOf(lowerSentence, lastEnd);
+      if (ciIdx === -1) continue;
+      // Use the original case text
+      html += escapeHtml(textContent.slice(lastEnd, ciIdx));
+      html += `<span class="caption-sentence" data-cidx="${i}">${escapeHtml(textContent.slice(ciIdx, ciIdx + s.text.length))}</span>`;
+      lastEnd = ciIdx + s.text.length;
+    } else {
+      // Text before this sentence
+      if (startIdx > lastEnd) {
+        html += escapeHtml(textContent.slice(lastEnd, startIdx));
+      }
+      html += `<span class="caption-sentence" data-cidx="${i}">${escapeHtml(s.text)}</span>`;
+      lastEnd = startIdx + s.text.length;
+    }
+  }
+  // Remaining text
+  if (lastEnd < textContent.length) {
+    html += escapeHtml(textContent.slice(lastEnd));
+  }
+
+  if (html) {
+    abstractEl.innerHTML = html;
+    abstractEl.dataset.captionsEnabled = 'true';
+  }
+}
+
+function updateCaptions() {
+  if (!state.showCaptions || state.captionSentences.length === 0) return;
+
+  const curTime = audio.currentTime;
+  let activeIdx = -1;
+
+  for (let i = 0; i < state.captionSentences.length; i++) {
+    const s = state.captionSentences[i];
+    if (curTime >= s.startTime && curTime < s.endTime) {
+      activeIdx = i;
+      break;
+    }
+  }
+
+  // If past all sentences, keep last one highlighted
+  const last = state.captionSentences.length - 1;
+  if (activeIdx === -1 && curTime >= (state.captionSentences[last]?.endTime || 0)) {
+    activeIdx = last;
+  }
+
+  // Find the abstract element for the current paper
+  const paperItem = document.querySelector(`.paper-item[data-index="${state.currentIndex}"]`);
+  if (!paperItem) return;
+  const abstractEl = paperItem.querySelector('.paper-detail-abstract');
+  if (!abstractEl || !abstractEl.dataset.captionsEnabled) return;
+
+  // Remove active class from all caption sentences
+  abstractEl.querySelectorAll('.caption-sentence.active').forEach(el => el.classList.remove('active'));
+
+  if (activeIdx >= 0) {
+    const el = abstractEl.querySelector(`[data-cidx="${activeIdx}"]`);
+    if (el) {
+      el.classList.add('active');
+    }
+  }
+}
+
+// ─── Audio Events ───────────────────────────────────────
+function onTimeUpdate() {
+  if (audio.duration) {
+    const pct = (audio.currentTime / audio.duration) * 100;
+    progressFill.style.width = pct + '%';
+    progressThumb.style.left = pct + '%';
+    currentTime.textContent = formatTime(audio.currentTime);
+    updateCaptions();
+  }
+}
+
+function onLoadedMetadata() {
+  totalTime.textContent = formatTime(audio.duration);
+  // Recalculate sentence timings now that actual duration is known
+  if (state.showCaptions && state.captionSentences.length > 0) {
+    calculateTimings();
+  }
+}
+
+function onTrackEnded() {
+  state.isPlaying = false;
+  updatePlayButtons();
+  // Auto-play next paper
+  if (state.currentIndex < state.papers.length - 1) {
+    setTimeout(() => playPaper(state.currentIndex + 1), 1000);
+  }
+}
+
+function onAudioError() {
+  console.error('Audio playback error');
+  state.isPlaying = false;
+  state.isLoading = false;
+  state.generatingSet.delete(state.papers[state.currentIndex]?.id);
+  updatePlayButtons();
+}
+
+function seekAudio(event) {
+  if (!audio.duration) return;
+  const rect = progressBar.getBoundingClientRect();
+  const pct = (event.clientX - rect.left) / rect.width;
+  audio.currentTime = pct * audio.duration;
+}
+
+// ─── UI Updates ─────────────────────────────────────────
+function updatePlayButtons() {
+  document.querySelectorAll('.play-btn').forEach(btn => {
+    const idx = parseInt(btn.dataset.index);
+    const paper = state.papers[idx];
+    if (idx === state.currentIndex && state.isPlaying) {
+      btn.textContent = '⏸';
+      btn.className = 'play-btn playing';
+    } else if (idx === state.currentIndex && state.isLoading) {
+      btn.textContent = '⏳';
+      btn.className = 'play-btn generating';
+    } else if (paper && state.generatingSet.has(paper.id)) {
+      btn.textContent = '⏳';
+      btn.className = 'play-btn generating';
+    } else {
+      btn.textContent = '▶';
+      btn.className = 'play-btn';
+    }
+  });
+
+  playBtn.textContent = state.isPlaying ? '⏸' : '▶';
+
+  document.querySelectorAll('.paper-item').forEach(el => {
+    el.classList.toggle('playing', parseInt(el.dataset.index) === state.currentIndex && state.isPlaying);
+  });
+}
+
+function updatePlayerInfo() {
+  const paper = state.papers[state.currentIndex];
+  if (paper) {
+    playerTrackTitle.textContent = paper.title;
+    playerTrackOpen.dataset.paperId = paper.id;
+  }
+}
+
+// ─── Filter Events ──────────────────────────────────────
+function resetPlayer() {
+  // Stop any ongoing playback
+  if (!audio.paused) {
+    audio.pause();
+  }
+  // Clear the audio source to force a fresh HTTP request
+  audio.removeAttribute('src');
+  audio.load();
+
+  // Restore original abstract content BEFORE resetting currentIndex
+  if (state.currentIndex >= 0) {
+    disableSentenceHighlight();
+  }
+
+  // Reset all player state
+  state.isPlaying = false;
+  state.isLoading = false;
+  state.currentIndex = -1;
+  state.generatingSet.clear();
+  state.captionSentences = [];
+
+  // Hide player bar
+  playerBar.classList.remove('active');
+
+  // Reset captions UI
+  if (state.showCaptions) {
+    state.showCaptions = false;
+    captionToggle.classList.remove('active');
+  }
+
+  // Reset progress display
+  progressFill.style.width = '0%';
+  currentTime.textContent = '0:00';
+  totalTime.textContent = '0:00';
+  playerTrackTitle.textContent = 'No track selected';
+
+  // Update all play buttons
+  updatePlayButtons();
+}
+
+function onTopicChange() {
+  state.currentTopic = topicSelect.value;
+  resetPlayer();
+  loadPapers(false);
+}
+
+function onDateChange() {
+  state.currentDate = datePicker.value;
+  resetPlayer();
+  loadPapers(false);
+}
+
+function onSortChange(sort) {
+  state.currentSort = sort;
+  // Update toggle UI
+  document.querySelectorAll('.sort-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.sort === sort);
+  });
+  // Disable date picker when viewing favorites
+  datePicker.disabled = (sort === 'fav');
+  if (sort === 'fav' && state.isSearchMode) {
+    clearSearch();
+  }
+  resetPlayer();
+  loadPapers(false);
+}
+
+// ─── Favorite Toggle ───────────────────────────────────
+async function toggleFavorite(idx) {
+  const paper = state.papers[idx];
+  if (!paper) return;
+
+  try {
+    const result = await API.favorite(paper.id);
+    paper.is_favorited = result.is_favorited;
+
+    // Update the star button
+    const btn = document.querySelector(`.fav-btn[data-idx="${idx}"]`);
+    if (btn) {
+      btn.textContent = result.is_favorited ? '★' : '☆';
+      btn.classList.toggle('favorited', result.is_favorited);
+      btn.title = result.is_favorited ? 'Remove from favorites' : 'Add to favorites';
+    }
+    // Update the card border
+    const card = document.querySelector(`.paper-item[data-index="${idx}"]`);
+    if (card) {
+      card.classList.toggle('favorited', result.is_favorited);
+    }
+
+    showToast(result.is_favorited ? 'Added to favorites' : 'Removed from favorites');
+  } catch (e) {
+    showToast('Failed to toggle favorite: ' + e.message);
+  }
+}
+
+// ─── Text Annotations ───────────────────────────────────
+const ANN_COLORS = {
+  yellow: 'rgba(234,179,8,0.35)',
+  green: 'rgba(34,197,94,0.35)',
+  blue: 'rgba(59,130,246,0.35)',
+  pink: 'rgba(236,72,153,0.35)',
+  orange: 'rgba(249,115,22,0.35)',
+};
+const ANN_COLOR_NAMES = Object.keys(ANN_COLORS);
+let pendingAnnotation = null; // { idx, startOffset, endOffset, text }
+let selectedAnnColor = 'yellow';
+let selectedAnnType = 'highlight';
+let activeAnnId = null;
+let activeAnnIdx = -1;
+
+function getAnnotations(paper) {
+  if (!paper.notes) return [];
+  try {
+    const parsed = JSON.parse(paper.notes);
+    if (Array.isArray(parsed)) return parsed;
+    return [];
+  } catch {
+    return []; // legacy plain text notes, ignore
+  }
+}
+
+function setAnnotations(paper, annotations) {
+  paper.notes = JSON.stringify(annotations);
+}
+
+function renderAbstractHtml(paper) {
+  const annotations = getAnnotations(paper);
+  if (annotations.length === 0) return escapeHtml(paper.abstract);
+
+  const sorted = [...annotations].sort((a, b) => a.startOffset - b.startOffset);
+  let html = '';
+  let lastEnd = 0;
+
+  for (const ann of sorted) {
+    // Validate offsets
+    if (ann.startOffset < lastEnd || ann.startOffset > paper.abstract.length || ann.endOffset > paper.abstract.length) {
+      continue; // skip invalid annotation
+    }
+    // Text before
+    html += escapeHtml(paper.abstract.slice(lastEnd, ann.startOffset));
+    // Highlighted text
+    const color = ANN_COLORS[ann.color] || ANN_COLORS.yellow;
+    const escapedText = escapeHtml(paper.abstract.slice(ann.startOffset, ann.endOffset));
+    if (ann.type === 'underline') {
+      html += `<span class="annotation-underline" style="text-decoration-color:${color}" data-ann-id="${ann.id}" onclick="event.stopPropagation(); onAnnotationClick(event,'${ann.id}')">${escapedText}</span>`;
+    } else {
+      html += `<span class="annotation-highlight" style="background:${color}" data-ann-id="${ann.id}" onclick="event.stopPropagation(); onAnnotationClick(event,'${ann.id}')">${escapedText}</span>`;
+    }
+    lastEnd = ann.endOffset;
+  }
+  // Remaining text
+  html += escapeHtml(paper.abstract.slice(lastEnd));
+  return html;
+}
+
+// ─── Create Annotation ──────────────────────────────────
+function onAbstractMouseUp(event, idx) {
+  // Ignore right-click / middle-click
+  if (event.button !== 0) return;
+  // Ignore clicks on annotation highlights (handled separately)
+  const target = event.target;
+  if (!target || !target.classList) return;
+  if (target.classList.contains('annotation-highlight') || target.classList.contains('annotation-underline')) return;
+
+  const selection = window.getSelection();
+  const selectedText = selection.toString().trim();
+  if (!selectedText || selectedText.length < 2) return;
+
+  const abstractEl = event.currentTarget;
+  const range = selection.getRangeAt(0);
+
+  // Calculate offsets within the abstract's text content
+  const preRange = document.createRange();
+  preRange.selectNodeContents(abstractEl);
+  preRange.setEnd(range.startContainer, range.startOffset);
+  const startOffset = preRange.toString().length;
+  const endOffset = startOffset + selectedText.length;
+
+  // Store pending annotation
+  pendingAnnotation = { idx, startOffset, endOffset, text: selectedText };
+  selectedAnnColor = 'yellow';
+  selectedAnnType = 'highlight';
+
+  // Reset and show picker
+  document.querySelectorAll('.annotation-picker-color').forEach(el => el.classList.toggle('selected', el.dataset.color === 'yellow'));
+  document.querySelectorAll('.annotation-picker-type').forEach(el => el.classList.toggle('selected', el.dataset.type === 'highlight'));
+  document.getElementById('annotationPickerInput').value = '';
+
+  showAnnotationPicker(event.clientX, event.clientY);
+  selection.removeAllRanges();
+}
+
+function showAnnotationPicker(x, y) {
+  const picker = document.getElementById('annotationPicker');
+  picker.classList.add('show');
+  // Mark as just shown so the document click handler won't close it immediately
+  picker.dataset.shownAt = Date.now();
+  // Position near the mouse, avoiding edges
+  const maxX = window.innerWidth - 240;
+  const maxY = window.innerHeight - 130;
+  picker.style.left = Math.min(x, maxX) + 'px';
+  picker.style.top = Math.min(y + 12, maxY) + 'px';
+  setTimeout(() => document.getElementById('annotationPickerInput').focus(), 100);
+}
+
+function hideAnnotationPicker() {
+  document.getElementById('annotationPicker').classList.remove('show');
+  pendingAnnotation = null;
+}
+
+function pickAnnotationColor(color) {
+  selectedAnnColor = color;
+  document.querySelectorAll('.annotation-picker-color').forEach(el => {
+    el.classList.toggle('selected', el.dataset.color === color);
+  });
+}
+
+function pickAnnotationType(type) {
+  selectedAnnType = type;
+  document.querySelectorAll('.annotation-picker-type').forEach(el => {
+    el.classList.toggle('selected', el.dataset.type === type);
+  });
+}
+
+function saveAnnotation() {
+  if (!pendingAnnotation) return;
+
+  const { idx, startOffset, endOffset, text } = pendingAnnotation;
+  const paper = state.papers[idx];
+  if (!paper) return;
+
+  const note = document.getElementById('annotationPickerInput').value.trim();
+
+  const annotations = getAnnotations(paper);
+  annotations.push({
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    text,
+    note: note || '',
+    color: selectedAnnColor,
+    type: selectedAnnType,
+    startOffset,
+    endOffset,
+  });
+  setAnnotations(paper, annotations);
+
+  // Save to backend
+  API.saveNotes(paper.id, paper.notes).catch(e => console.error('Failed to save annotations:', e));
+
+  // Re-render abstract
+  const abstractEl = document.querySelector(`.paper-item[data-index="${idx}"] .paper-detail-abstract`);
+  if (abstractEl) {
+    abstractEl.innerHTML = renderAbstractHtml(paper);
+  }
+
+  // Update meta indicator
+  updateAnnotationMeta(idx, annotations.length);
+
+  hideAnnotationPicker();
+  showToast('Annotation added');
+}
+
+function updateAnnotationMeta(idx, count) {
+  const meta = document.querySelector(`.paper-item[data-index="${idx}"] .paper-item-meta`);
+  if (!meta) return;
+  const existing = meta.querySelector('.ann-count');
+  if (existing) existing.remove();
+  if (count > 0) {
+    const span = document.createElement('span');
+    span.className = 'ann-count';
+    span.style.cssText = 'font-size:11px';
+    span.title = `${count} annotation(s)`;
+    span.textContent = `📝 ${count}`;
+    meta.appendChild(span);
+  }
+}
+
+// ─── View / Delete Annotation ───────────────────────────
+function onAnnotationClick(event, annId) {
+  event.stopPropagation();
+  const paperItem = event.target.closest('.paper-item');
+  if (!paperItem) return;
+  const idx = parseInt(paperItem.dataset.index);
+  const paper = state.papers[idx];
+  if (!paper) return;
+
+  const annotations = getAnnotations(paper);
+  const ann = annotations.find(a => a.id === annId);
+  if (!ann) return;
+
+  activeAnnId = annId;
+  activeAnnIdx = idx;
+  const typeLabel = ann.type === 'underline' ? '═ Underline' : '▨ Highlight';
+  document.getElementById('annotationTooltipNote').textContent = ann.note ? `${typeLabel}: ${ann.note}` : `${typeLabel} (no note)`;
+  showAnnotationTooltip(event.clientX, event.clientY);
+}
+
+function showAnnotationTooltip(x, y) {
+  const tooltip = document.getElementById('annotationTooltip');
+  tooltip.classList.add('show');
+  const maxX = window.innerWidth - 340;
+  const maxY = window.innerHeight - 120;
+  tooltip.style.left = Math.min(x, maxX) + 'px';
+  tooltip.style.top = Math.min(y + 10, maxY) + 'px';
+}
+
+function hideAnnotationTooltip() {
+  document.getElementById('annotationTooltip').classList.remove('show');
+  activeAnnId = null;
+  activeAnnIdx = -1;
+}
+
+function deleteAnnotation() {
+  if (!activeAnnId || activeAnnIdx < 0) return;
+  const idx = activeAnnIdx;
+  const paper = state.papers[idx];
+  if (!paper) { hideAnnotationTooltip(); return; }
+
+  let annotations = getAnnotations(paper);
+  annotations = annotations.filter(a => a.id !== activeAnnId);
+  setAnnotations(paper, annotations);
+
+  // Save to backend
+  API.saveNotes(paper.id, paper.notes).catch(e => console.error('Failed to save annotations:', e));
+
+  // Re-render abstract
+  const paperItem = document.querySelector(`.paper-item[data-index="${idx}"]`);
+  if (paperItem) {
+    const abstractEl = paperItem.querySelector('.paper-detail-abstract');
+    if (abstractEl) {
+      abstractEl.innerHTML = renderAbstractHtml(paper);
+    }
+  }
+
+  updateAnnotationMeta(idx, annotations.length);
+  hideAnnotationTooltip();
+  showToast('Annotation deleted');
+}
+
+// Close annotation popups on Escape or click outside
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    hideAnnotationPicker();
+    hideAnnotationTooltip();
+  }
+});
+document.addEventListener('click', (e) => {
+  const picker = document.getElementById('annotationPicker');
+  const tooltip = document.getElementById('annotationTooltip');
+  if (picker.classList.contains('show') && !picker.contains(e.target)) {
+    // Don't close if picker was just shown (from text selection mouseup)
+    const shownAt = picker.dataset.shownAt;
+    if (shownAt && Date.now() - parseInt(shownAt) < 500) return;
+    hideAnnotationPicker();
+  }
+  if (tooltip.classList.contains('show') && !tooltip.contains(e.target)) {
+    const shownAt = tooltip.dataset.shownAt;
+    if (shownAt && Date.now() - parseInt(shownAt) < 500) return;
+    hideAnnotationTooltip();
+  }
+});
+
+// ─── Refresh ────────────────────────────────────────────
+async function onRefresh() {
+  refreshBtn.classList.add('spinning');
+  showToast('Fetching latest papers...');
+  try {
+    const result = await API.refresh();
+    showToast(`Got ${result.new_papers || 0} new papers`);
+    await loadPapers(false);
+  } catch (e) {
+    showToast('Refresh failed: ' + e.message);
+  } finally {
+    refreshBtn.classList.remove('spinning');
+  }
+}
+
+// ─── Infinite Scroll ────────────────────────────────────
+function onScroll() {
+  if (state.loadingMore || state.page >= state.totalPages) return;
+
+  const { scrollTop, scrollHeight, clientHeight } = paperList;
+  if (scrollTop + clientHeight >= scrollHeight - 200) {
+    state.loadingMore = true;
+    state.page++;
+    // Show loader
+    const loader = document.createElement('div');
+    loader.className = 'paper-list-empty load-more';
+    loader.style.padding = '20px';
+    loader.innerHTML = '<p style="font-size:13px">Loading more...</p>';
+    paperList.appendChild(loader);
+
+    loadPapers(true).then(() => {
+      state.loadingMore = false;
+    }).catch(() => {
+      state.loadingMore = false;
+    });
+  }
+}
+
+// ─── Toast ──────────────────────────────────────────────
+let toastTimer;
+
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+// ─── Voice Control (Wake Word) ──────────────────────────
+const VOICE_IDLE = 'idle';
+const VOICE_HOT = 'hot';
+let voiceRecognition = null;
+let voiceState = VOICE_IDLE;
+let hotTimer = null;
+let pausedByVoice = false;    // was playback auto-paused for voice command?
+let lastWakeMs = 0;           // debounce wake detection
+const WAKE_WORDS = ['小p', '小屁'];
+const HOT_TIMEOUT_MS = 6000;
+
+function initVoiceControl() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    const ind = document.getElementById('voiceIndicator');
+    if (ind) ind.style.display = 'none';
+    return;
+  }
+  voiceRecognition = new SR();
+  voiceRecognition.continuous = true;
+  voiceRecognition.interimResults = true;
+  voiceRecognition.lang = 'zh-CN';
+  voiceRecognition.maxAlternatives = 3;
+
+  voiceRecognition.onresult = function(event) {
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const texts = [];
+      for (let j = 0; j < event.results[i].length; j++) {
+        texts.push(event.results[i][j].transcript.trim().toLowerCase());
+      }
+      if (event.results[i].isFinal) {
+        handleVoiceInput(texts, true);
+      } else {
+        handleVoiceInput(texts, false);
+      }
+    }
+  };
+
+  voiceRecognition.onerror = function(event) {
+    if (event.error === 'not-allowed' || event.error === 'aborted') return;
+    try { voiceRecognition.stop(); } catch(e) {}
+    setTimeout(() => {
+      try { voiceRecognition.start(); } catch(e) {}
+    }, 500);
+  };
+
+  voiceRecognition.onend = function() {
+    setTimeout(() => {
+      if (voiceRecognition) {
+        try { voiceRecognition.start(); } catch(e) {}
+      }
+    }, 200);
+  };
+
+  try { voiceRecognition.start(); } catch(e) {}
+  setVoiceIndicator(VOICE_IDLE);
+}
+
+function setVoiceIndicator(state) {
+  voiceState = state;
+  const ind = document.getElementById('voiceIndicator');
+  if (!ind) return;
+  ind.className = 'voice-indicator ' + state;
+  ind.title = state === VOICE_IDLE
+    ? 'Idle \u2014 say "\u5c0fp" to wake'
+    : 'Awake \u2014 speak a command';
+}
+
+function handleVoiceInput(texts, isFinal) {
+  const allText = texts.join(' ');
+  const hasWakeWord = WAKE_WORDS.some(w => allText.includes(w));
+
+  // Pause playback immediately when wake word is heard
+  if (hasWakeWord && state.isPlaying) {
+    const now = Date.now();
+    if (now - lastWakeMs > 2000) {
+      lastWakeMs = now;
+      togglePlay();         // stop TTS so mic can hear commands
+      pausedByVoice = true;
+    }
+  }
+
+  // Only process commands from final results
+  if (!isFinal) return;
+
+  if (voiceState === VOICE_IDLE) {
+    if (!hasWakeWord) return;
+
+    let stripped = allText;
+    WAKE_WORDS.forEach(w => { stripped = stripped.replace(w, ''); });
+    stripped = stripped.trim();
+
+    if (stripped.length > 1) {
+      if (matchAndExecute([stripped])) return;
+    }
+
+    setVoiceIndicator(VOICE_HOT);
+    showToast('[Voice] listening...');
+
+    clearTimeout(hotTimer);
+    hotTimer = setTimeout(() => {
+      if (voiceState === VOICE_HOT) {
+        setVoiceIndicator(VOICE_IDLE);
+        showToast('[Voice] standby');
+        autoResume();
+      }
+    }, HOT_TIMEOUT_MS);
+    return;
+  }
+
+  if (voiceState === VOICE_HOT) {
+    if (hasWakeWord) {
+      clearTimeout(hotTimer);
+      hotTimer = setTimeout(() => {
+        if (voiceState === VOICE_HOT) {
+          setVoiceIndicator(VOICE_IDLE);
+          autoResume();
+        }
+      }, HOT_TIMEOUT_MS);
+    }
+
+    if (matchAndExecute(texts)) {
+      clearTimeout(hotTimer);
+      setVoiceIndicator(VOICE_IDLE);
+    }
+  }
+}
+
+function autoResume() {
+  if (pausedByVoice && !state.isPlaying && state.currentIndex >= 0) {
+    pausedByVoice = false;
+    setTimeout(() => togglePlay(), 400);
+  }
+}
+
+function matchAndExecute(texts) {
+  const commands = [
+    {
+      keywords: ['play', 'start', '播放', '开始', '放'],
+      action: () => {
+        if (state.currentIndex < 0 && state.papers.length > 0) {
+          playPaper(0);
+        } else {
+          togglePlay();
+        }
+      },
+      label: 'Play'
+    },
+    {
+      keywords: ['pause', 'stop', '暂停', '停止', '停'],
+      action: () => { if (state.isPlaying) togglePlay(); },
+      label: 'Pause'
+    },
+    {
+      keywords: ['next', '下一篇', '下一首', '下一个', '下一'],
+      action: () => nextTrack(),
+      label: 'Next'
+    },
+    {
+      keywords: ['previous', 'prev', '上一篇', '上一首', '上一个', '上一'],
+      action: () => prevTrack(),
+      label: 'Previous'
+    },
+    {
+      keywords: ['caption', 'subtitles', '字幕', 'subtitle'],
+      action: () => { if (!state.showCaptions) toggleCaptions(); },
+      label: 'Captions on'
+    },
+    {
+      keywords: ['close caption', 'hide caption', '关闭字幕'],
+      action: () => { if (state.showCaptions) toggleCaptions(); },
+      label: 'Captions off'
+    },
+    {
+      keywords: ['speed up', 'faster', '快点', '加速'],
+      action: () => {
+        const sel = document.getElementById('speedSelect');
+        sel.selectedIndex = Math.min(sel.options.length - 1, sel.selectedIndex + 1);
+        changeSpeed();
+      },
+      label: 'Speed up'
+    },
+    {
+      keywords: ['slow down', 'slower', '减速', '慢点'],
+      action: () => {
+        const sel = document.getElementById('speedSelect');
+        sel.selectedIndex = Math.max(0, sel.selectedIndex - 1);
+        changeSpeed();
+      },
+      label: 'Slow down'
+    }
+  ];
+
+  for (const text of texts) {
+    for (const cmd of commands) {
+      for (const kw of cmd.keywords) {
+        if (text.includes(kw)) {
+          cmd.action();
+          showToast('[Voice] ' + cmd.label);
+          // Auto-resume playback after a non-pause command
+          if (cmd.label !== 'Pause') autoResume();
+          else pausedByVoice = false;
+          const ind = document.getElementById('voiceIndicator');
+          if (ind) {
+            ind.className = 'voice-indicator hot';
+            setTimeout(() => {
+              if (voiceState === VOICE_IDLE) ind.className = 'voice-indicator idle';
+            }, 500);
+          }
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+// Toggle voice control on/off
+function toggleVoiceControl() {
+  state.voiceEnabled = !state.voiceEnabled;
+  const btn = document.getElementById('voiceToggleBtn');
+  const ind = document.getElementById('voiceIndicator');
+  if (state.voiceEnabled) {
+    btn.classList.add('voice-active');
+    initVoiceControl();
+    showToast('Voice control enabled');
+  } else {
+    btn.classList.remove('voice-active');
+    if (voiceRecognition) {
+      try { voiceRecognition.stop(); } catch(e) {}
+      voiceRecognition = null;
+    }
+    voiceState = VOICE_IDLE;
+    if (ind) ind.className = 'voice-indicator';
+    showToast('Voice control disabled');
+  }
+}
+
+// Auto-start voice is now controlled by the toggle button
+// (no longer auto-starts on DOMContentLoaded)
+
+// ─── Helpers ────────────────────────────────────────────
+function formatTime(s) {
+  if (!s || isNaN(s)) return '0:00';
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+
+function formatDuration(sec) {
+  if (!sec) return '—';
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+# Dependencies
+__pycache__/
+*.py[cod]
+.env
+.venv
+venv/
+env/
+
+# Data
+data/audio/
+data/papers.db
+
+# IDE
+.idea/
+.vscode/
+
+# Git
+.git/
+.gitignore
+.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db

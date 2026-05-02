@@ -1,22 +1,13 @@
-# render.yaml - PaperCast deployment configuration
-# Docs: https://render.com/docs/blueprint-spec
-
+# render.yaml
 services:
   - type: web
     name: papercast-backend
     runtime: python3.11
-    region: singapore  # closest to China for lower latency
-    plan: free         # upgrade to starter ($7/mo) for Persistent Disk
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python start.py"
     envVars:
       - key: PYTHONUNBUFFERED
         value: "1"
       - key: DEEPSEEK_API_KEY
-        sync: false  # set this in Render Dashboard manually
-    healthCheckPath: /api/status
-    # For production with Persistent Disk (Starter plan+), use:
-    # disk:
-    #   name: data
-    #   mountPath: /app/data
-    #   sizeGB: 1
+        value: ""
+    healthCheckPath: "/api/status"

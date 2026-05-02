@@ -3,7 +3,7 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 *.egg
-.qoder
+.qoder/
 dist/
 build/
 
